@@ -113,6 +113,26 @@ export function imagesInOutput(tool: string, output: unknown): InlineImage[] {
     .slice(0, MAX_REFS)
 }
 
+/**
+ * The image files a tool's stored result names by path: SendUserFile's
+ * `attachments`, which carry no picture of their own, only where it lies.
+ */
+export function imageFilesInOutput(tool: string, output: unknown): ImageRef[] {
+  if (tool !== 'SendUserFile' || !isRecord(output) || !Array.isArray(output.attachments)) {
+    return []
+  }
+
+  return output.attachments
+    .flatMap((attachment): ImageRef[] => {
+      if (!isRecord(attachment) || typeof attachment.path !== 'string') {
+        return []
+      }
+      const isImage = attachment.isImage === true || IMAGE_EXT.test(attachment.path)
+      return isImage ? [{ kind: 'file', raw: attachment.path }] : []
+    })
+    .slice(0, MAX_REFS)
+}
+
 const BASE64_DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 

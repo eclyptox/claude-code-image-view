@@ -2,7 +2,7 @@ import type { Elements, Register } from 'claude-code'
 
 import { ensure, loadFile, loadInline, loadUrl, peek, workQueue, type Entry, type Io } from './prepare'
 import { isPersonalOrigin, resolveOutsideAutomounts } from './policy'
-import { decodedLength, findImageRefs, fitCells, imagesInOutput, type ImageRef } from './refs'
+import { decodedLength, findImageRefs, fitCells, imageFilesInOutput, imagesInOutput, type ImageRef } from './refs'
 import { isShownNow, parseSwitch } from './settings'
 
 const MAX_COLUMNS = 80
@@ -173,11 +173,14 @@ export const register: Register = (on, options) => {
     }
   }
 
-  const viewsOfOutput = (host: Io, id: string, tool: string, input: unknown, output: unknown): View[] =>
-    imagesInOutput(tool, output).map((image, at) => {
+  const viewsOfOutput = async (host: Io, id: string, tool: string, input: unknown, output: unknown): Promise<View[]> => {
+    const inline = imagesInOutput(tool, output).map((image, at): View => {
       const key = `tool:${id}:${at}`
       return { key, label: toolLabel(tool, input), entry: ensure(key, () => loadInline(host, image, key)) }
     })
+    const files = await Promise.all(imageFilesInOutput(tool, output).map(ref => viewOfRef(host, ref, false)))
+    return [...inline, ...files.filter((view): view is View => view !== undefined)]
+  }
 
   const loadRemote =
     (host: Io) =>
@@ -297,7 +300,7 @@ export const register: Register = (on, options) => {
     if (!isShown() || io === undefined || e.surface !== 'terminal' || e.props.isErrored) {
       return next(e)
     }
-    const views = viewsOfOutput(io, e.props.tool_use_id, e.props.tool, undefined, e.props.output)
+    const views = await viewsOfOutput(io, e.props.tool_use_id, e.props.tool, undefined, e.props.output)
     if (views.length === 0) {
       return next(e)
     }
@@ -319,11 +322,14 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     const host = io
-    const views = e.props.calls.flatMap((call, at) =>
-      call.isErrored
-        ? []
-        : viewsOfOutput(host, call.tool_use_id ?? `${e.requestId}:${at}`, call.tool, call.input, call.output),
+    const perCall = await Promise.all(
+      e.props.calls.map((call, at) =>
+        call.isErrored
+          ? []
+          : viewsOfOutput(host, call.tool_use_id ?? `${e.requestId}:${at}`, call.tool, call.input, call.output),
+      ),
     )
+    const views = perCall.flat()
     if (views.length === 0) {
       return next(e)
     }

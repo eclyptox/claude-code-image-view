@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { decodedLength, findImageRefs, fitCells, imagesInOutput, MAX_REFS, pngSize } from '../hooks/refs'
+import { decodedLength, findImageRefs, fitCells, imageFilesInOutput, imagesInOutput, MAX_REFS, pngSize } from '../hooks/refs'
 
 // The head of an 80×50 PNG (signature + IHDR): enough for pngSize.
 const PNG_80x50 = 'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAyCAYAAADLLVz8AAAABGdBTUEAALGPC/xhBQAAACBjSFJN'
@@ -115,5 +115,24 @@ describe('imagesInOutput', () => {
     expect(imagesInOutput('mcp__chrome__take_screenshot', mcp)).toEqual([{ data: JPEG_HEAD, mime: 'image/jpeg' }])
     expect(imagesInOutput('mcp__x__y', api)).toEqual([{ data: PNG_80x50, mime: 'image/png' }])
     expect(imagesInOutput('Bash', { stdout: 'ok', stderr: '' })).toEqual([])
+  })
+})
+
+describe('imageFilesInOutput', () => {
+  test('reads the image paths SendUserFile attached, and only those', async () => {
+    const output = {
+      attachments: [
+        { path: '/tmp/s/boot.png', size: 19800, isImage: true },
+        { path: '/tmp/s/report.pdf', size: 900, isImage: false },
+        { path: '/tmp/s/skeleton.jpg', size: 24000, isImage: false },
+      ],
+    }
+
+    expect(imageFilesInOutput('SendUserFile', output)).toEqual([
+      { kind: 'file', raw: '/tmp/s/boot.png' },
+      { kind: 'file', raw: '/tmp/s/skeleton.jpg' },
+    ])
+    expect(imageFilesInOutput('Bash', output)).toEqual([])
+    expect(imageFilesInOutput('SendUserFile', { attachments: 'nope' })).toEqual([])
   })
 })

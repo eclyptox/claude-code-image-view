@@ -102,4 +102,29 @@ describe('drawing', () => {
 
     expect(image).toBeDefined()
   })
+
+  test('an image SendUserFile attached draws under its result', async ($, on) => {
+    standIn(on)
+    await $.session.start({ cwd: '/Users/me', surface: 'terminal', isInteractive: true })
+
+    const target = {
+      plugin: 'cc-image-view',
+      surface: 'terminal',
+      component: 'ToolResult',
+      props: {
+        tool_use_id: 'toolu_2',
+        tool: 'SendUserFile',
+        isErrored: false,
+        output: { attachments: [{ path: '/Users/me/pics/a.png', size: 220, isImage: true }] },
+      },
+    } as const
+    let image
+    for (let attempt = 0; attempt < 20 && image === undefined; attempt += 1) {
+      const ui = await $.ui.mount(target)
+      image = await ui.find({ type: 'Image' })
+      await ui.unmount()
+    }
+
+    expect(image).toBeDefined()
+  })
 })
